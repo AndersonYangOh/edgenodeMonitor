@@ -1,0 +1,325 @@
+
+    <!-- Main content -->
+    <section class="content">
+
+      <!-- Default box -->
+      <div id="nodelist" class="box">
+        <div class="box-header with-border">
+          <h3 class="box-title">边缘节点监控列表</h3>
+          <div class="box-tools ">
+            <button type="button" class="btn btn-box-tool" data-widget="collapse" data-toggle="tooltip"
+                    title="Collapse">
+              <i class="fa fa-minus"></i></button>
+            <button type="button" class="btn btn-box-tool" data-widget="remove" data-toggle="tooltip" title="Remove">
+              <i class="fa fa-times"></i></button>
+          </div>
+        </div>
+        <div class="box-body">
+			<span class="info-box-text">
+			<h3></h3>
+			<button onclick="refresh()">刷新</button>
+			</span>
+			</br>
+			
+			<table id="appTable" class="table table-bordered table-hover"
+				style="font-size: 12px; width: 100%">
+				<thead>
+					<tr>
+						<th>主机名</th>
+						<th>IP</th>
+						<th>节点运行状态</th>
+						<th>设备绑定状态</th>
+						<th>部署应用数量</th>
+						<th>操作</th>
+					</tr>
+				</thead>	
+				<tbody>
+					<tr>
+						<td>kubeedge-edge1</td>
+						<td>10.1.131.2</td>
+						<td>Running</td>
+						<td>Device001,Device002</td>
+						<td>1</td>
+						<td>
+							<button>删除</button>
+							<button>查看监控</button>
+						</td>
+					</tr>
+				</tbody>				
+			</table>
+        </div>
+        <!-- /.box-body -->
+        <div class="box-footer">
+          
+        </div>
+        <!-- /.box-footer-->
+      </div>
+      <!-- /.box -->
+      
+      <div id="nodeDetail" style="display: none;">
+      	<div class="col-xs-6" id="upper">
+	      	<div class="col-sm-3">
+				<select id="pregap">
+					<option value='180000'>3分钟</option>
+					<option value='300000'>5分钟</option>
+					<option value='600000'>10分钟</option>
+					<option value='1800000'>30分钟</option>
+					<option value='3600000'>60分钟</option>
+				</select>
+			</div>
+			<div class="col-sm-3">
+				<button onclick="back()">返回</button>
+			</div>
+		</div>
+		<div id="cpu_monitor_chart" style="height:500px;width:1000px;">
+		
+		</div>
+		<div id="memory_monitor_chart" style="height:500px;width:1000px;">
+		
+		</div>
+		<div id="disk_monitor_chart" style="height:500px;width:1000px;">
+		
+		</div>
+      </div>
+
+    </section>
+    <!-- /.content -->
+
+  <script type="text/javascript">
+      $(function(){
+    	  getNodesList();
+      });
+      
+      function getNodesList(){
+    	  $.ajax({
+    		  type: 'POST',
+  			  url: '/nodeMonitor/getNodesList',
+  			  success : function(data){
+  				  var list = data.result;
+  				  $("#appTable tbody").html("");
+  				  var row = "";
+  				  for(var i=0; i<list.length; i++){
+  					  row += "<tr><td>"+list[i].hostName+"</td><td>"
+  					  +list[i].ip+"</td><td>"+list[i].runStatus
+  					  +"</td><td></td><td>"+list[i].appNum+"</td><td><button onclick=\"del('"+list[i].ip+"')\">删除</button><button onclick=\"detail('"+list[i].ip+"')\">查看监控</button></td></tr>";
+  				  }
+  				  $("#appTable tbody").append(row);
+  			  },
+	    	  error : function(errorMsg){
+				  alert("图表请求数据失败!");
+			  }
+    	  });
+      }
+      
+      function back(){
+    	  $("#nodelist").show();
+    	  $("#nodeDetail").hide();
+      }
+      
+      function del(ip){
+    	  alert(ip);
+      }
+      
+      function detail(ip){
+    	  $("#nodelist").hide();
+    	  $("#nodeDetail").show();
+    	  getDetail(ip);
+    	  
+          $("#pregap").change(function(){
+        	  getDetail(ip);
+          });
+      }
+      
+      function getDetail(ip){
+    	  var pregap = $("#pregap option:checked").val();
+    	  var params = {};
+    	  params["pregap"] = pregap;
+    	  params["ip"] = ip;
+    	  var cpu_flag = true;
+    	  var mem_flag = true;
+    	  var disk_flag = true;
+
+		  var cpuChart = echarts.init(document.getElementById('cpu_monitor_chart'));
+		  cpuChart.clear();
+		  var memChart = echarts.init(document.getElementById('memory_monitor_chart'));
+		  memChart.clear();
+		  var diskChart = echarts.init(document.getElementById('disk_monitor_chart'));
+		  diskChart.clear();
+    	  $.ajax({
+    		  type: 'POST',
+    		  data: params,
+    		  url: '/nodeMonitor/nodeCPUDetail',
+    		  success : function(data){
+    			  if(data.flag){
+    				  var result = data.result;
+        			  var xtime = [];
+        			  var yvalue = [];
+        			  for (var i = 0; i < result.length; i++) {
+        				  xtime.push(result[i].time);
+        				  yvalue.push(result[i].res);
+        			  }
+        			  
+        			  cpuChart.setOption({
+        				  title: {
+        				  	  text : ip+" CPU",
+        				  	  x:'center',
+        			          y:'top'
+        				  },
+       				      xAxis: {
+       				          type: 'category',
+       				          data: xtime
+       				      },
+       				      yAxis: {
+       				          type: 'value',
+    	   				      axisLabel : {
+    	   				          formatter : '{value}%'
+    	   				      }
+       				      },
+       				      series: [{
+       				          data: yvalue,
+       				          type: 'line',
+       				          itemStyle : { 
+       				        	  normal: {
+       				        		  label : {
+       				        			  show: true
+       				        		  }
+       				      		  }
+       				      	  }
+       				      }]
+        			  });
+    			  }else{
+    				  cpu_flag = false;
+    			  }
+    		  },
+    		  error : function(errorMsg){
+				  alert("图表请求数据失败!");
+			  }
+    	  });
+    	  $.ajax({
+    		  type: 'POST',
+    		  data: params,
+    		  url: '/nodeMonitor/nodeMemoryDetail',
+    		  success : function(data){
+    			  if(data.flag){
+    				  var used = data.result.used;
+        			  var total = data.result.total;
+        			  var xtime = [];
+        			  var yused = [];
+        			  var ytotal = [];
+        			  for (var i = 0; i < used.length; i++) {
+        				  xtime.push(used[i].time);
+        				  yused.push(used[i].res);
+        				  ytotal.push(total[i].res);
+        			  }
+        			  memChart.setOption({
+        				  title: {
+        				  	  text : ip+" Memory Usage",
+        				  	  x:'center',
+        			          y:'top'
+        				  },
+        				  legend: {
+        					  left:'right',
+        				      data:['已使用memory','总memory']
+        				  },
+       				      xAxis: {
+       				          type: 'category',
+       				          data: xtime
+       				      },
+       				      yAxis: {
+       				          type: 'value',
+    	   				      axisLabel : {
+    	   				          formatter : '{value}GB'
+    	   				      }
+       				      },
+       				      series: [{
+       				    	  name: "已使用memory",
+       				          data: yused,
+       				          type: 'line',
+       				          itemStyle : { 
+       				        	  normal: {
+       				        		  label : {
+       				        			  show: true
+       				        		  }
+       				      		  }
+       				      	  }
+       				      },
+       				      {
+       				    	  name: "总memory",
+     				          data: ytotal,
+     				          type: 'line',
+     				          itemStyle : { 
+     				        	  normal: {
+     				        		  label : {
+     				        			  show: true
+     				        		  }
+     				      		  }
+     				      	  }
+       				      }]
+        			  });
+    			  }else{
+    				  mem_flag = false;
+    			  }
+    		  },
+    		  error : function(errorMsg){
+				  alert("图表请求数据失败!");
+			  }
+    	  });
+    	  $.ajax({
+    		  type: 'POST',
+    		  data: params,
+    		  url: '/nodeMonitor/nodeDiskDetail',
+    		  success : function(data){
+    			  if(data.flag){
+    				  var result = data.result;
+        			  
+        			  diskChart.setOption({
+       				      series: [{
+     				          name: '磁盘使用率',
+     				          type: 'gauge',
+     				          detail: {formatter:'{value}%'},
+     				          data: [{value: result, name: '磁盘使用率'}]
+       				      }]
+        			  });
+    			  }else{
+    				  disk_flag = false;
+    			  }
+    		  },
+    		  error : function(errorMsg){
+				  alert("图表请求数据失败!");
+			  }
+    	  });
+    	  setTimeout(function(){
+        	  if(mem_flag==false&&cpu_flag==false&&disk_flag==false){
+        		  $("#nodelist").show();
+            	  $("#nodeDetail").hide();
+            	  alert("未查询到有效数据!");
+        	  }
+    	  }, 3000);
+      }
+      
+      function refresh(){
+    	  $.ajax({
+    		  type: 'POST',
+  			  url: '/nodeMonitor/refresh',
+  			  success : function(data){
+  				  var list = data.result;
+  				  $("#appTable tbody").html("");
+  				  var row = "";
+  				  for(var i=0; i<list.length; i++){
+  					  row += "<tr><td>"+list[i].hostName+"</td><td>"
+  					  +list[i].ip+"</td><td>"+list[i].runStatus
+  					  +"</td><td></td><td>"+list[i].appNum+"</td><td><button onclick=\"del("+list[i].hostname+")\">删除</button><button onclick=\"detail("+list[i].hostname+")\">查看监控</button></td></tr>";
+  				  }
+  				  $("#appTable tbody").append(row);
+  				  alert("数据已更新！");
+  				  $(".content").load("/iiot/node/edge_node_monitor.html", function(){
+  					  getNodesList();
+  				  });
+  			  },
+  			  error : function(errorMsg){
+				  alert("图表请求数据失败!");
+			  }
+    	  });
+      }
+      
+  </script>
